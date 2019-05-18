@@ -20,6 +20,7 @@ var (
 	users       = flag.String("users", "AndrewDi", "Send targets")
 	message     = flag.String("msg", "You haven't set main message body", "Message body")
 	profileName = flag.String("profile", "Dev", "Weixin App config name")
+	nocache     = flag.Bool("nocache", false, "If cache AccessToken to file.")
 )
 
 func main() {
@@ -129,6 +130,9 @@ func getAccessToken(corpid string, corpsecret string) (err error) {
 	if data.ErrCode == 0 {
 		accessToken = data.AccessToken
 
+		if *nocache {
+			return
+		}
 		expireDuration, err := time.ParseDuration(fmt.Sprintf("%ds", data.ExpiresIn))
 		if err != nil {
 			return err
