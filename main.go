@@ -17,7 +17,7 @@ var agentId int
 
 var (
 	configFile  = flag.String("config", "weixin.ini", "General weixin configuration file")
-	users       = flag.String("users", "dpan", "Send targets")
+	users       = flag.String("users", "AndrewDi", "Send targets")
 	message     = flag.String("msg", "You haven't set main message body", "Message body")
 	profileName = flag.String("profile", "Dev", "Weixin App config name")
 )
