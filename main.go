@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gorilla/mux"
 	"gopkg.in/gcfg.v1"
 )
 
@@ -16,35 +17,57 @@ var accessToken string
 var agentId int
 
 var (
-	configFile  = flag.String("config", "weixin.ini", "General weixin configuration file")
-	users       = flag.String("users", "AndrewDi", "Send targets")
-	message     = flag.String("msg", "You haven't set main message body", "Message body")
-	profileName = flag.String("profile", "Dev", "Weixin App config name")
-	nocache     = flag.Bool("nocache", false, "If cache AccessToken to file.")
+	configFile = flag.String("config", "weixin.ini", "General weixin configuration file")
+	//users       = flag.String("users", "AndrewDi", "Send targets")
+	//message = flag.String("msg", "You haven't set main message body", "Message body")
+	//profileName = flag.String("profile", "Dev", "Weixin App config name")
+	nocache = flag.Bool("nocache", false, "If cache AccessToken to file.")
 )
+
+var config = struct {
+	Profile map[string]*struct {
+		Corpid     string
+		Corpsecret string
+		AgentId    int
+		User       string
+		Passwd     string
+	}
+}{}
 
 func main() {
 	flag.Parse()
-
-	config := struct {
-		Profile map[string]*struct {
-			Corpid     string
-			Corpsecret string
-			AgentId    int
-		}
-	}{}
 
 	err := gcfg.ReadFileInto(&config, *configFile)
 	if err != nil {
 		panic(err)
 	}
 
-	agentId = config.Profile[*profileName].AgentId
-	err = getAccessToken(config.Profile[*profileName].Corpid, config.Profile[*profileName].Corpsecret)
+	router := mux.NewRouter().StrictSlash(true)
+	router.HandleFunc("/sendMsg/{profileName}/{users}", handleSendMsg).Methods("POST")
+	http.ListenAndServe(":8080", router)
+}
+
+func handleSendMsg(writer http.ResponseWriter, request *http.Request) {
+	vars := mux.Vars(request)
+	profileName := vars["profileName"]
+	users := vars["users"]
+	msg, _ := ioutil.ReadAll(request.Body)
+	username, passwd, ok := request.BasicAuth()
+	if !ok || (username != config.Profile[profileName].User || passwd != config.Profile[profileName].Passwd) {
+		writer.Header().Add("WWW-Authenticate", "Basic realm=Protected Area")
+		writer.WriteHeader(401)
+		return
+	}
+	sendMsg(string(msg), profileName, users)
+}
+
+func sendMsg(msg string, profileName string, users string) {
+	agentId = config.Profile[profileName].AgentId
+	err := getAccessToken(profileName, config.Profile[profileName].Corpid, config.Profile[profileName].Corpsecret)
 	if err != nil {
 		panic(err)
 	}
-	ret, err := sendTextMsg(*message, *users)
+	ret, err := sendTextMsg(msg, users)
 	if err != nil {
 		fmt.Printf("Send message fail:%s Error:%s", ret, err.Error())
 	}
@@ -96,8 +119,8 @@ func readTokenCacheFile(filename string) (err error) {
 	return
 }
 
-func getAccessToken(corpid string, corpsecret string) (err error) {
-	tokenCacheFile := *profileName + ".tokenCacheFile"
+func getAccessToken(profileName string, corpid string, corpsecret string) (err error) {
+	tokenCacheFile := profileName + ".tokenCacheFile"
 	if corpid == "" || corpsecret == "" {
 		panic(fmt.Sprintf("Panic process config corpid:%s corpsecret:%s", corpid, corpsecret))
 		return
